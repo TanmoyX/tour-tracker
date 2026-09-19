@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Tour Tracker — 3D World Globe</title>
+<style>
+  :root {
+    --bg: #05070f;
+    --panel: rgba(12, 18, 32, 0.72);
+    --panel-solid: #0c1220;
+    --border: rgba(255, 255, 255, 0.09);
+    --text: #e8eefc;
+    --muted: #8a97b3;
+    --accent: #34d399;
+    --accent-2: #22d3ee;
+    --warn: #f59e0b;
+    --danger: #f87171;
+    --radius: 14px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    overflow: hidden;
+  }
+
+  #globe {
+    position: fixed;
+    inset: 0;
+    cursor: grab;
+  }
+  #globe:active { cursor: grabbing; }
+
+  .layer {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    gap: 12px;
+  }
+  .layer > * { pointer-events: auto; }
+
+  .glass {
+    background: var(--panel);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  }
+
+  /* ---------- top bar ---------- */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 12px 16px;
+    flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-right: 4px; }
+  .brand .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 14px var(--accent);
+  }
+  .brand h1 {
+    font-size: 15px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin: 0;
+    font-weight: 650;
+  }
+  .brand span { color: var(--muted); font-size: 12px; }
+
+  .stats { display: flex; gap: 20px; margin-left: auto; align-items: center; flex-wrap: wrap; }
+  .stat { text-align: left; line-height: 1.15; }
+  .stat b { font-size: 19px; font-variant-numeric: tabular-nums; }
+  .stat small { display: block; color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em; }
+
+  .ring { position: relative; width: 52px; height: 52px; flex: none; }
+  .ring svg { transform: rotate(-90deg); }
+  .ring .track { stroke: rgba(255,255,255,0.09); }
+  .ring .bar { stroke: url(#ringGrad); stroke-linecap: round; transition: stroke-dashoffset 0.6s ease; }
+  .ring figcaption {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+
+  .search { position: relative; }
+  .search input {
+    width: 210px;
+    padding: 9px 12px 9px 32px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.05);
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+  }
+  .search input:focus { border-color: rgba(52,211,153,0.6); }
+  .search::before {
+    content: "⌕";
+    position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+    color: var(--muted); font-size: 15px;
+  }
+  .suggest {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+    max-height: 260px; overflow: auto;
+    background: var(--panel-solid);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: none;
+    z-index: 20;
+  }
+  .suggest.open { display: block; }
+  .suggest button {
+    display: flex; width: 100%; gap: 8px; align-items: center;
+    padding: 8px 11px; background: none; border: 0; color: var(--text);
+    font-size: 13px; text-align: left; cursor: pointer;
+  }
+  .suggest button:hover { background: rgba(255,255,255,0.07); }
+
+  /* ---------- body columns ---------- */
+  .columns {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    min-height: 0;
+    pointer-events: none;
+  }
+  .columns > * { pointer-events: auto; }
+
+  .panel {
+    width: 300px;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .panel h2 {
+    margin: 0;
+    padding: 13px 15px;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .panel .body { overflow: auto; padding: 8px; }
+
+  .journal-group { margin-bottom: 8px; }
+  .journal-group > p {
+    margin: 10px 8px 6px;
+    font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+  }
+  .country-row {
+    display: flex; align-items: center; gap: 9px;
+    width: 100%; padding: 8px 9px; border-radius: 10px;
+    background: none; border: 0; color: var(--text); cursor: pointer;
+    font-size: 13px; text-align: left;
+  }
+  .country-row:hover { background: rgba(255,255,255,0.07); }
+  .country-row .flag { font-size: 17px; line-height: 1; }
+  .country-row .meta { margin-left: auto; color: var(--muted); font-size: 11px; white-space: nowrap; }
+  .empty { color: var(--muted); font-size: 12.5px; padding: 18px 14px; line-height: 1.6; }
+
+  /* ---------- detail card ---------- */
+  #detail { display: none; }
+  #detail.open { display: flex; }
+  .detail-head { padding: 14px 15px; border-bottom: 1px solid var(--border); }
+  .detail-head .row { display: flex; align-items: center; gap: 10px; }
+  .detail-head .flag { font-size: 30px; line-height: 1; }
+  .detail-head h3 { margin: 0; font-size: 16px; font-weight: 650; }
+  .detail-head .sub { color: var(--muted); font-size: 11.5px; margin-top: 3px; }
+  .close {
+    margin-left: auto; background: none; border: 0; color: var(--muted);
+    font-size: 20px; cursor: pointer; line-height: 1; padding: 2px 4px;
+  }
+  .close:hover { color: var(--text); }
+
+  .chip {
+    display: inline-block; padding: 3px 9px; border-radius: 999px;
+    font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+    border: 1px solid var(--border); color: var(--muted); margin-top: 8px;
+  }
+  .chip.visited { color: #061; background: var(--accent); border-color: transparent; font-weight: 700; }
+
+  .trip {
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    padding: 10px 11px;
+    margin-bottom: 8px;
+    background: rgba(255,255,255,0.035);
+  }
+  .trip .top { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+  .trip .top .date { font-weight: 600; }
+  .trip .top .stars { color: var(--warn); letter-spacing: 1px; }
+  .trip .note { margin: 6px 0 0; font-size: 12.5px; color: #c7d2e8; line-height: 1.5; white-space: pre-wrap; }
+  .trip .del {
+    margin-left: auto; background: none; border: 0; color: var(--muted);
+    cursor: pointer; font-size: 14px; padding: 0 2px;
+  }
+  .trip .del:hover { color: var(--danger); }
+
+  form.block { padding: 12px 15px 16px; border-top: 1px dashed var(--border); }
+  form.block label {
+    display: block; font-size: 10.5px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 5px;
+  }
+  form.block .field { margin-bottom: 11px; }
+  form.block input[type="month"],
+  form.block textarea {
+    width: 100%; padding: 9px 10px; border-radius: 10px;
+    border: 1px solid var(--border); background: rgba(255,255,255,0.05);
+    color: var(--text); font-size: 13px; font-family: inherit; outline: none;
+  }
+  form.block textarea { resize: vertical; min-height: 62px; }
+  form.block input:focus, form.block textarea:focus { border-color: rgba(52,211,153,0.6); }
+
+  .rating { display: flex; gap: 4px; }
+  .rating button {
+    background: none; border: 0; cursor: pointer; font-size: 20px;
+    color: rgba(255,255,255,0.22); padding: 0; line-height: 1;
+  }
+  .rating button.on { color: var(--warn); }
+
+  .btn {
+    padding: 9px 13px; border-radius: 10px; border: 1px solid var(--border);
+    background: rgba(255,255,255,0.05); color: var(--text);
+    font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
+  .btn:hover { background: rgba(255,255,255,0.1); }
+  .btn.primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #04221a; border-color: transparent;
+  }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.ghost-danger { color: var(--danger); }
+  .actions { display: flex; gap: 8px; }
+  .actions .btn { flex: 1; }
+
+  /* ---------- bottom toolbar ---------- */
+  footer {
+    display: flex; gap: 8px; align-items: center; justify-content: center;
+    padding: 9px 12px; align-self: center; flex-wrap: wrap;
+  }
+  footer .btn.on { border-color: rgba(52,211,153,0.55); color: var(--accent); }
+  footer .sep { width: 1px; height: 20px; background: var(--border); }
+  .hint { color: var(--muted); font-size: 11.5px; padding-left: 4px; }
+
+  /* ---------- misc ---------- */
+  #loader {
+    position: fixed; inset: 0; display: grid; place-items: center;
+    background: var(--bg); z-index: 50; gap: 14px; text-align: center;
+    transition: opacity 0.5s ease;
+  }
+  #loader .spin {
+    width: 46px; height: 46px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.12); border-top-color: var(--accent);
+    animation: spin 0.9s linear infinite; margin: 0 auto 14px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loader p { color: var(--muted); font-size: 13px; margin: 0; }
+
+  #toast {
+    position: fixed; bottom: 86px; left: 50%; transform: translate(-50%, 14px);
+    background: var(--panel-solid); border: 1px solid var(--border);
+    padding: 10px 16px; border-radius: 999px; font-size: 13px;
+    opacity: 0; pointer-events: none; transition: all 0.25s ease; z-index: 40;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  .globe-tip {
+    background: rgba(8, 12, 22, 0.92);
+    border: 1px solid var(--border);
+    padding: 7px 11px; border-radius: 9px; font-size: 12.5px;
+    color: var(--text);
+  }
+  .globe-tip small { color: var(--muted); display: block; margin-top: 2px; font-size: 11px; }
+
+  ::-webkit-scrollbar { width: 9px; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  @media (max-width: 900px) {
+    .panel { width: 260px; }
+    .search input { width: 150px; }
+    .stats { gap: 12px; }
+  }
+  @media (max-width: 720px) {
+    #journal-panel { display: none; }
+    .columns { justify-content: flex-end; }
+    .panel { width: 100%; max-width: 100%; }
+    header { gap: 10px; }
+    .brand span { display: none; }
+    .stats { gap: 14px; width: 100%; justify-content: space-between; }
+    .search input { width: 100%; }
+    .search { flex: 1; min-width: 140px; }
+    .hint { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="globe"></div>
+
+<div class="layer">
+  <header class="glass">
+    <div class="brand">
+      <span class="dot"></span>
+      <div>
+        <h1>Tour Tracker</h1>
+        <span>Click a country, then commit journal.json</span>
+      </div>
+    </div>
+
+    <div class="search">
+      <input id="search" type="text" placeholder="Find a country…" autocomplete="off" spellcheck="false" />
+      <div class="suggest" id="suggest"></div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><b id="stat-countries">0</b><small>Countries</small></div>
+      <div class="stat"><b id="stat-continents">0</b><small>Continents</small></div>
+      <figure class="ring" style="margin:0">
+        <svg width="52" height="52">
+          <defs>
+            <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#34d399" />
+              <stop offset="100%" stop-color="#22d3ee" />
+            </linearGradient>
+          </defs>
+          <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="5" />
+          <circle class="bar" id="ring-bar" cx="26" cy="26" r="22" fill="none" stroke-width="5"
+                  stroke-dasharray="138.2" stroke-dashoffset="138.2" />
+        </svg>
+        <figcaption id="ring-label">0%</figcaption>
+      </figure>
+    </div>
+  </header>
+
+  <div class="columns">
+    <!-- travel journal -->
+    <aside class="panel glass" id="journal-panel">
+      <h2>Travel Journal <span id="journal-count" style="color:var(--accent)">0</span></h2>
+      <div class="body" id="journal">
+        <p class="empty">No stamps yet.<br />Spin the globe, click a country and fill in your first block.</p>
+      </div>
+    </aside>
+
+    <!-- country detail -->
+    <aside class="panel glass" id="detail">
+      <div class="detail-head">
+        <div class="row">
+          <span class="flag" id="d-flag">🏳️</span>
+          <div>
+            <h3 id="d-name">Country</h3>
+            <div class="sub" id="d-sub">—</div>
+          </div>
+          <button class="close" id="d-close" title="Close">×</button>
+        </div>
+        <span class="chip" id="d-chip">Not visited</span>
+      </div>
+
+      <form class="block" id="trip-form">
+        <div class="field">
+          <label for="f-date">Visited</label>
+          <input type="month" id="f-date" />
+        </div>
+        <div class="field">
+          <label>Rating</label>
+          <div class="rating" id="f-rating">
+            <button type="button" data-v="1">★</button>
+            <button type="button" data-v="2">★</button>
+            <button type="button" data-v="3">★</button>
+            <button type="button" data-v="4">★</button>
+            <button type="button" data-v="5">★</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="f-notes">Notes</label>
+          <textarea id="f-notes" placeholder="Best meal, who you went with, what to do next time…"></textarea>
+        </div>
+        <div class="actions">
+          <button type="submit" class="btn primary" id="f-save">Save visit</button>
+          <button type="button" class="btn ghost-danger" id="f-clear" title="Remove this country from your journal">Reset</button>
+        </div>
+      </form>
+    </aside>
+  </div>
+
+  <footer class="glass">
+    <button class="btn on" id="btn-rotate">⟳ Auto-rotate</button>
+    <button class="btn" id="btn-route">✈ Route</button>
+    <button class="btn" id="btn-home">⌂ Reset view</button>
+    <div class="sep"></div>
+    <button class="btn" id="btn-export">↓ journal.json</button>
+    <button class="btn" id="btn-import">↑ Import</button>
+    <span class="hint" id="hint">Replace journal.json in the repo, then commit</span>
+    <input type="file" id="file" accept="application/json" hidden />
+  </footer>
+</div>
+
+<div id="toast"></div>
+
+<div id="loader">
+  <div>
+    <div class="spin"></div>
+    <p>Building your planet…</p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/globe.gl@2.32.4/dist/globe.gl.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  /* ------------------------------------------------------------------ *
+   * storage
+   * ------------------------------------------------------------------ */
+  const STORE_KEY = "tour-tracker.v1";
+
+  function toMonth(value) {
+    if (!value) return "";
+    const s = String(value);
+    if (/^\d{4}-\d{2}$/.test(s)) return s;
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 7);
+    const d = new Date(s);
+    if (!isNaN(d)) {
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    }
+    return "";
+  }
+
+  function migrateCountries(raw) {
+    const out = {};
+    const src = (raw && raw.countries) || {};
+    Object.keys(src).forEach((key) => {
+      const rec = src[key] || {};
+      const entry = Array.isArray(rec.entries) && rec.entries.length
+        ? rec.entries.slice().sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0]
+        : rec;
+      if (!entry) return;
+      out[key] = {
+        name: rec.name || entry.name,
+        iso2: rec.iso2 || entry.iso2 || null,
+        continent: rec.continent || entry.continent || "Other",
+        date: toMonth(entry.date),
+        rating: Number(entry.rating || 0),
+        notes: entry.notes || ""
+      };
+    });
+    return out;
+  }
+
+  function emptyStore() {
+    return { version: 2, updatedAt: "", countries: {} };
+  }
+
+  function loadStore() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
+      return {
+        version: 2,
+        updatedAt: raw.updatedAt || "",
+        countries: migrateCountries(raw)
+      };
+    } catch (e) {
+      return emptyStore();
+    }
+  }
+
+  function journalPayload() {
+    return {
+      version: 2,
+      updatedAt: store.updatedAt || "",
+      countries: store.countries
+    };
+  }
+
+  function saveStore() {
+    store.version = 2;
+    store.updatedAt = new Date().toISOString();
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(journalPayload()));
+    } catch (e) {
+      toast("Could not save to this browser's storage");
+    }
+  }
+
+  function downloadJournal() {
+    const blob = new Blob([JSON.stringify(journalPayload(), null, 2) + "\n"], {
+      type: "application/json"
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "journal.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function persist() {
+    saveStore();
+    downloadJournal();
+  }
+
+  function applyJournal(data) {
+    store.version = 2;
+    store.updatedAt = (data && data.updatedAt) || "";
+    store.countries = migrateCountries(data);
+  }
+
+  async function loadCommittedJournal() {
+    try {
+      const res = await fetch(new URL("journal.json", window.location.href), { cache: "no-store" });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data || typeof data !== "object") return null;
+      return data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  const store = loadStore();
+
+  /* ------------------------------------------------------------------ *
+   * helpers
+   * ------------------------------------------------------------------ */
+  const $ = (id) => document.getElementById(id);
+
+  const pick = (obj, ...keys) => {
+    for (const k of keys) {
+      const v = obj[k];
+      if (v !== undefined && v !== null && v !== "" && v !== -99 && v !== "-99") return v;
+    }
+    return null;
+  };
+
+  function flagOf(iso2) {
+    if (!iso2 || iso2.length !== 2 || !/^[A-Za-z]{2}$/.test(iso2)) return "🏳️";
+    return String.fromCodePoint(...[...iso2.toUpperCase()].map((c) => 127397 + c.charCodeAt(0)));
+  }
+
+  function prettyMonth(ym) {
+    const m = toMonth(ym);
+    if (!m) return "Undated";
+    const d = new Date(m + "-01T00:00:00");
+    if (isNaN(d)) return m;
+    return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  }
+
+  function currentMonth() {
+    const now = new Date();
+    return now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    const el = $("toast");
+    el.textContent = msg;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("show"), 2400);
+  }
+
+  /* geographic centre of a feature, based on its largest ring */
+  function centroid(feature) {
+    const g = feature.geometry;
+    if (!g) return { lat: 0, lng: 0 };
+    const polys = g.type === "Polygon" ? [g.coordinates] : g.coordinates;
+    let best = null;
+    let bestArea = -1;
+    for (const poly of polys) {
+      const ring = poly[0];
+      if (!ring || !ring.length) continue;
+      let minX = 180, maxX = -180, minY = 90, maxY = -90;
+      for (const [x, y] of ring) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+      const area = (maxX - minX) * (maxY - minY);
+      if (area > bestArea) {
+        bestArea = area;
+        best = { lat: (minY + maxY) / 2, lng: (minX + maxX) / 2 };
+      }
+    }
+    return best || { lat: 0, lng: 0 };
+  }
+
+  /* ------------------------------------------------------------------ *
+   * country model
+   * ------------------------------------------------------------------ */
+  let countries = [];              // normalised feature list
+  const byKey = new Map();
+  let totalCountries = 0;          // excludes Antarctica
+
+  function normalise(feature) {
+    const p = feature.properties || {};
+    const name = pick(p, "NAME", "name", "NAME_EN", "ADMIN", "admin", "SOVEREIGNT") || "Unknown";
+    const iso3 = pick(p, "ISO_A3", "iso_a3", "ISO_A3_EH", "ADM0_A3", "adm0_a3", "id");
+    const iso2 = pick(p, "ISO_A2", "iso_a2", "ISO_A2_EH", "WB_A2");
+    const continent = pick(p, "CONTINENT", "continent", "REGION_UN", "region_un") || "Other";
+    const pop = Number(pick(p, "POP_EST", "pop_est") || 0);
+
+    feature.tt = {
+      key: String(iso3 || name).toUpperCase(),
+      name,
+      iso2: iso2 || null,
+      continent,
+      pop,
+      center: centroid(feature)
+    };
+    return feature;
+  }
+
+  const visitOf = (key) => store.countries[key] || null;
+  const isVisited = (key) => Boolean(visitOf(key));
+  const visitRating = (key) => (visitOf(key) && visitOf(key).rating) || 0;
+
+  /* ------------------------------------------------------------------ *
+   * globe
+   * ------------------------------------------------------------------ */
+  const world = Globe()(document.getElementById("globe"))
+    .globeImageUrl("https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/earth-dark.jpg")
+    .bumpImageUrl("https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/earth-topology.png")
+    .backgroundImageUrl("https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/night-sky.png")
+    .atmosphereColor("#4dd4ff")
+    .atmosphereAltitude(0.18)
+    .polygonsTransitionDuration(320)
+    .showGraticules(true);
+
+  world.controls().autoRotate = true;
+  world.controls().autoRotateSpeed = 0.45;
+  world.controls().enableDamping = true;
+
+  let hovered = null;
+  let selected = null;
+
+  const VISIT_COLORS = [
+    "rgba(52, 211, 153, 0.75)",   // 0 stars
+    "rgba(45, 212, 191, 0.78)",
+    "rgba(34, 211, 238, 0.80)",
+    "rgba(129, 212, 250, 0.82)",
+    "rgba(167, 243, 208, 0.86)",
+    "rgba(212, 255, 235, 0.92)"   // 5 stars
+  ];
+
+  function capColor(d) {
+    const key = d.tt.key;
+    if (d === selected) return "rgba(255, 255, 255, 0.9)";
+    if (isVisited(key)) return VISIT_COLORS[visitRating(key)];
+    if (d === hovered) return "rgba(120, 160, 220, 0.45)";
+    return "rgba(120, 150, 200, 0.12)";
+  }
+
+  function altitude(d) {
+    if (d === hovered || d === selected) return 0.055;
+    return isVisited(d.tt.key) ? 0.028 : 0.006;
+  }
+
+  function refreshGlobe() {
+    world
+      .polygonAltitude(altitude)
+      .polygonCapColor(capColor)
+      .polygonSideColor(() => "rgba(20, 60, 90, 0.35)")
+      .polygonStrokeColor(() => "rgba(160, 200, 240, 0.35)");
+  }
+
+  function flyTo(feature, altitudeLevel) {
+    const c = feature.tt.center;
+    world.pointOfView({ lat: c.lat, lng: c.lng, altitude: altitudeLevel || 1.7 }, 900);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * data loading
+   * ------------------------------------------------------------------ */
+  const SOURCES = [
+    "https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_110m_admin_0_countries.geojson",
+    "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson"
+  ];
+
+  async function loadCountries() {
+    let lastErr;
+    for (const url of SOURCES) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(res.status);
+        const gj = await res.json();
+        if (gj && gj.features && gj.features.length) return gj.features;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    throw lastErr || new Error("No country data");
+  }
+
+  loadCountries()
+    .then((features) => {
+      const SKIP = new Set(["Antarctica", "Seven seas (open ocean)"]);
+      countries = features.map(normalise).filter((f) => !SKIP.has(f.tt.continent));
+      countries.sort((a, b) => a.tt.name.localeCompare(b.tt.name));
+      countries.forEach((f) => byKey.set(f.tt.key, f));
+      totalCountries = countries.length;
+
+      world.polygonsData(countries)
+        .polygonLabel(({ tt }) => {
+          const v = visitOf(tt.key);
+          return `<div class="globe-tip">${flagOf(tt.iso2)} <b>${tt.name}</b>` +
+                 `<small>${tt.continent}${v ? ` · visited ${prettyMonth(v.date)}` : " · not visited yet"}</small></div>`;
+        })
+        .onPolygonHover((d) => {
+          hovered = d;
+          document.getElementById("globe").style.cursor = d ? "pointer" : "grab";
+          refreshGlobe();
+        })
+        .onPolygonClick((d) => openDetail(d));
+
+      refreshGlobe();
+      world.pointOfView({ lat: 22, lng: 12, altitude: 2.4 }, 0);
+
+      return loadCommittedJournal().then((file) => {
+        if (file && Object.prototype.hasOwnProperty.call(file, "countries")) {
+          const localTime = store.updatedAt || "";
+          const fileTime = file.updatedAt || "";
+          if (!localTime || fileTime >= localTime) applyJournal(file);
+        }
+        renderAll();
+        const loader = $("loader");
+        loader.style.opacity = "0";
+        setTimeout(() => loader.remove(), 520);
+      });
+    })
+    .catch(() => {
+      $("loader").innerHTML =
+        '<div><p style="color:#f87171;font-size:14px">Could not download the country map.</p>' +
+        '<p>This page needs an internet connection the first time it loads.</p></div>';
+    });
+
+  /* ------------------------------------------------------------------ *
+   * detail panel
+   * ------------------------------------------------------------------ */
+  let formRating = 0;
+
+  function openDetail(feature) {
+    selected = feature;
+    refreshGlobe();
+    flyTo(feature);
+
+    const tt = feature.tt;
+    const visit = visitOf(tt.key);
+
+    $("d-flag").textContent = flagOf(tt.iso2);
+    $("d-name").textContent = tt.name;
+    $("d-sub").textContent =
+      tt.continent + (tt.pop > 0 ? " · " + Intl.NumberFormat(undefined, { notation: "compact" }).format(tt.pop) + " people" : "");
+
+    const chip = $("d-chip");
+    chip.textContent = visit ? `Visited · ${prettyMonth(visit.date)}` : "Not visited";
+    chip.classList.toggle("visited", Boolean(visit));
+
+    $("f-date").value = visit && visit.date ? visit.date : currentMonth();
+    $("f-notes").value = visit ? visit.notes || "" : "";
+    setRating(visit ? visit.rating || 0 : 0);
+    $("f-save").textContent = visit ? "Update visit" : "Save visit";
+
+    $("detail").classList.add("open");
+  }
+
+  function closeDetail() {
+    selected = null;
+    $("detail").classList.remove("open");
+    refreshGlobe();
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+    );
+  }
+
+  function setRating(v) {
+    formRating = v;
+    $("f-rating").querySelectorAll("button").forEach((b) => {
+      b.classList.toggle("on", Number(b.dataset.v) <= v);
+    });
+  }
+
+  $("f-rating").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (b) setRating(Number(b.dataset.v) === formRating ? 0 : Number(b.dataset.v));
+  });
+
+  $("d-close").addEventListener("click", closeDetail);
+
+  $("trip-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!selected) return;
+    const tt = selected.tt;
+
+    store.countries[tt.key] = {
+      name: tt.name,
+      iso2: tt.iso2,
+      continent: tt.continent,
+      date: toMonth($("f-date").value) || currentMonth(),
+      rating: formRating,
+      notes: $("f-notes").value.trim()
+    };
+
+    persist();
+    openDetail(selected);
+    renderAll();
+    toast(`${flagOf(tt.iso2)} ${tt.name} stamped · commit the downloaded journal.json`);
+  });
+
+  $("f-clear").addEventListener("click", () => {
+    if (!selected) return;
+    const tt = selected.tt;
+    if (!store.countries[tt.key]) return;
+    if (!confirm(`Remove ${tt.name} from your journal?`)) return;
+    delete store.countries[tt.key];
+    persist();
+    openDetail(selected);
+    renderAll();
+    toast(`${tt.name} cleared · commit the downloaded journal.json`);
+  });
+
+  /* ------------------------------------------------------------------ *
+   * journal + stats
+   * ------------------------------------------------------------------ */
+  function visitedFeatures() {
+    return Object.keys(store.countries)
+      .map((k) => byKey.get(k))
+      .filter(Boolean);
+  }
+
+  function renderStats() {
+    const visited = visitedFeatures();
+    const continents = new Set(visited.map((f) => f.tt.continent)).size;
+    const pct = totalCountries ? Math.round((visited.length / totalCountries) * 100) : 0;
+
+    $("stat-countries").textContent = visited.length;
+    $("stat-continents").textContent = continents;
+    $("journal-count").textContent = visited.length;
+    $("ring-label").textContent = pct + "%";
+
+    const circumference = 2 * Math.PI * 22;
+    $("ring-bar").style.strokeDashoffset = String(circumference * (1 - pct / 100));
+  }
+
+  function renderJournal() {
+    const visited = visitedFeatures();
+    const wrap = $("journal");
+
+    if (!visited.length) {
+      wrap.innerHTML =
+        '<p class="empty">No stamps yet.<br />Spin the globe, click a country and fill in your first block.</p>';
+      return;
+    }
+
+    const groups = {};
+    visited.forEach((f) => (groups[f.tt.continent] = groups[f.tt.continent] || []).push(f));
+
+    wrap.innerHTML = Object.keys(groups)
+      .sort()
+      .map((cont) => {
+        const rows = groups[cont]
+          .sort((a, b) => a.tt.name.localeCompare(b.tt.name))
+          .map((f) => {
+            const visit = visitOf(f.tt.key);
+            const r = visitRating(f.tt.key);
+            return `<button class="country-row" data-key="${f.tt.key}">
+                      <span class="flag">${flagOf(f.tt.iso2)}</span>
+                      <span>${escapeHtml(f.tt.name)}${r ? ` <span style="color:var(--warn)">${"★".repeat(r)}</span>` : ""}</span>
+                      <span class="meta">${visit && visit.date ? prettyMonth(visit.date) : ""}</span>
+                    </button>`;
+          })
+          .join("");
+        return `<div class="journal-group"><p>${escapeHtml(cont)} · ${groups[cont].length}</p>${rows}</div>`;
+      })
+      .join("");
+
+    wrap.querySelectorAll(".country-row").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        const f = byKey.get(btn.dataset.key);
+        if (f) openDetail(f);
+      })
+    );
+  }
+
+  /* route arcs between consecutive trips, in chronological order */
+  function renderRoute() {
+    if (!routeOn) {
+      world.arcsData([]).pointsData([]);
+      return;
+    }
+
+    const stops = visitedFeatures()
+      .map((f) => ({ date: (visitOf(f.tt.key) && visitOf(f.tt.key).date) || "", f }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const arcs = [];
+    for (let i = 1; i < stops.length; i++) {
+      const a = stops[i - 1].f.tt.center;
+      const b = stops[i].f.tt.center;
+      if (a.lat === b.lat && a.lng === b.lng) continue;
+      arcs.push({
+        startLat: a.lat, startLng: a.lng,
+        endLat: b.lat, endLng: b.lng,
+        label: `${stops[i - 1].f.tt.name} → ${stops[i].f.tt.name}`
+      });
+    }
+
+    world
+      .arcsData(arcs)
+      .arcColor(() => ["rgba(52,211,153,0.1)", "rgba(34,211,238,0.85)"])
+      .arcStroke(0.45)
+      .arcAltitudeAutoScale(0.42)
+      .arcDashLength(0.45)
+      .arcDashGap(0.25)
+      .arcDashAnimateTime(2600)
+      .arcLabel((d) => `<div class="globe-tip">${d.label}</div>`)
+      .pointsData(stops.map((s) => ({ lat: s.f.tt.center.lat, lng: s.f.tt.center.lng })))
+      .pointColor(() => "rgba(255,255,255,0.85)")
+      .pointAltitude(0.035)
+      .pointRadius(0.16);
+  }
+
+  function renderAll() {
+    renderStats();
+    renderJournal();
+    renderRoute();
+    refreshGlobe();
+  }
+
+  /* ------------------------------------------------------------------ *
+   * search
+   * ------------------------------------------------------------------ */
+  const searchInput = $("search");
+  const suggestBox = $("suggest");
+
+  searchInput.addEventListener("input", () => {
+    const q = searchInput.value.trim().toLowerCase();
+    if (!q) return closeSuggest();
+
+    const hits = countries.filter((f) => f.tt.name.toLowerCase().includes(q)).slice(0, 8);
+    if (!hits.length) return closeSuggest();
+
+    suggestBox.innerHTML = hits
+      .map(
+        (f) =>
+          `<button data-key="${f.tt.key}"><span>${flagOf(f.tt.iso2)}</span><span>${escapeHtml(f.tt.name)}</span>` +
+          `${isVisited(f.tt.key) ? '<span style="margin-left:auto;color:var(--accent)">✓</span>' : ""}</button>`
+      )
+      .join("");
+    suggestBox.classList.add("open");
+
+    suggestBox.querySelectorAll("button").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        const f = byKey.get(btn.dataset.key);
+        closeSuggest();
+        searchInput.value = "";
+        if (f) openDetail(f);
+      })
+    );
+  });
+
+  function closeSuggest() {
+    suggestBox.classList.remove("open");
+    suggestBox.innerHTML = "";
+  }
+
+  searchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const first = suggestBox.querySelector("button");
+      if (first) first.click();
+    }
+    if (e.key === "Escape") closeSuggest();
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".search")) closeSuggest();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeDetail();
+    if (e.key === "/" && document.activeElement !== searchInput) {
+      e.preventDefault();
+      searchInput.focus();
+    }
+  });
+
+  /* ------------------------------------------------------------------ *
+   * toolbar
+   * ------------------------------------------------------------------ */
+  let routeOn = false;
+
+  $("btn-rotate").addEventListener("click", (e) => {
+    const c = world.controls();
+    c.autoRotate = !c.autoRotate;
+    e.currentTarget.classList.toggle("on", c.autoRotate);
+  });
+
+  $("btn-route").addEventListener("click", (e) => {
+    routeOn = !routeOn;
+    e.currentTarget.classList.toggle("on", routeOn);
+    renderRoute();
+    toast(routeOn ? "Showing your travel route" : "Route hidden");
+  });
+
+  $("btn-home").addEventListener("click", () => {
+    closeDetail();
+    world.pointOfView({ lat: 22, lng: 12, altitude: 2.4 }, 900);
+  });
+
+  $("btn-export").addEventListener("click", () => {
+    if (!store.updatedAt) saveStore();
+    downloadJournal();
+    toast("Replace journal.json in the repo, then commit");
+  });
+
+  $("btn-import").addEventListener("click", () => $("file").click());
+
+  $("file").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (!data || !data.countries) throw new Error("bad file");
+        applyJournal(data);
+        persist();
+        closeDetail();
+        renderAll();
+        toast("Journal imported · commit the downloaded journal.json");
+      } catch (err) {
+        toast("That file doesn't look like a Tour Tracker export");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  });
+
+  /* keep the canvas crisp on resize */
+  window.addEventListener("resize", () => {
+    world.width(window.innerWidth).height(window.innerHeight);
+  });
+  world.width(window.innerWidth).height(window.innerHeight);
+})();
+</script>
+</body>
+</html>
