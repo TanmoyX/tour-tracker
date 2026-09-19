@@ -871,14 +871,23 @@
       return;
     }
 
+    visited.sort((a, b) => {
+      const da = (visitOf(a.tt.key) && visitOf(a.tt.key).date) || "";
+      const db = (visitOf(b.tt.key) && visitOf(b.tt.key).date) || "";
+      return db.localeCompare(da) || a.tt.name.localeCompare(b.tt.name);
+    });
+
     const groups = {};
-    visited.forEach((f) => (groups[f.tt.continent] = groups[f.tt.continent] || []).push(f));
+    visited.forEach((f) => {
+      const date = (visitOf(f.tt.key) && visitOf(f.tt.key).date) || "";
+      const year = date.slice(0, 4) || "Undated";
+      (groups[year] = groups[year] || []).push(f);
+    });
 
     wrap.innerHTML = Object.keys(groups)
-      .sort()
-      .map((cont) => {
-        const rows = groups[cont]
-          .sort((a, b) => a.tt.name.localeCompare(b.tt.name))
+      .sort((a, b) => b.localeCompare(a))
+      .map((year) => {
+        const rows = groups[year]
           .map((f) => {
             const visit = visitOf(f.tt.key);
             const r = visitRating(f.tt.key);
@@ -889,7 +898,7 @@
                     </button>`;
           })
           .join("");
-        return `<div class="journal-group"><p>${escapeHtml(cont)} · ${groups[cont].length}</p>${rows}</div>`;
+        return `<div class="journal-group"><p>${escapeHtml(year)} · ${groups[year].length}</p>${rows}</div>`;
       })
       .join("");
 
