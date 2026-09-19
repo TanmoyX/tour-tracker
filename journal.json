@@ -1,5 +1,62 @@
 {
   "version": 2,
-  "updatedAt": "",
-  "countries": {}
+  "updatedAt": "2026-09-19T19:47:19.328Z",
+  "countries": {
+    "IND": {
+      "name": "India",
+      "iso2": "IN",
+      "continent": "Asia",
+      "date": "1996-11",
+      "rating": 0,
+      "notes": "Born Here"
+    },
+    "EST": {
+      "name": "Estonia",
+      "iso2": "EE",
+      "continent": "Europe",
+      "date": "2026-02",
+      "rating": 0,
+      "notes": "Relocated to work for Bolt"
+    },
+    "POL": {
+      "name": "Poland",
+      "iso2": "PL",
+      "continent": "Europe",
+      "date": "2026-05",
+      "rating": 0,
+      "notes": "First work trip at Warsaw"
+    },
+    "HUN": {
+      "name": "Hungary",
+      "iso2": "HU",
+      "continent": "Europe",
+      "date": "2026-03",
+      "rating": 0,
+      "notes": "Visit Gulu"
+    },
+    "AUT": {
+      "name": "Austria",
+      "iso2": "AT",
+      "continent": "Europe",
+      "date": "2026-04",
+      "rating": 0,
+      "notes": "Vienna Salzburg and Hallstat trip"
+    },
+    "HRV": {
+      "name": "Croatia",
+      "iso2": "HR",
+      "continent": "Europe",
+      "date": "2026-07",
+      "rating": 0,
+      "notes": "Dubrovnik - Game of Thrones"
+    },
+    "ITA": {
+      "name": "Italy",
+      "iso2": "IT",
+      "continent": "Europe",
+      "date": "2026-07",
+      "rating": 0,
+      "notes": "Rome"
+    }
+  }
 }
